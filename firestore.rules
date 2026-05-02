@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tenants/{document=**} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId && request.resource.data.userId == resource.data.userId;
+    }
+
+    match /units/{document=**} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId && request.resource.data.userId == resource.data.userId;
+    }
+
+    match /expenses/{document=**} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId && request.resource.data.userId == resource.data.userId;
+    }
+
+    match /payments/{document=**} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId && request.resource.data.userId == resource.data.userId;
+    }
+  }
+}

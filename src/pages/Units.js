@@ -84,7 +84,7 @@ function Units() {
         setEditingId(null);
       } else {
         if (currentUser?.uid) {
-          await addUnit(currentUser.uid, unitData);
+          await addUnit(unitData);
         } else {
           const newId = Math.max(...units.map(u => u.id || 0), 0) + 1;
           setUnits([...units, { ...unitData, id: newId }]);

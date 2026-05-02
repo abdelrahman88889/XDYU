@@ -274,19 +274,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // المستخدمون يرون بياناتهم فقط
     match /tenants/{document=**} {
-      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
     match /units/{document=**} {
-      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
     match /expenses/{document=**} {
-      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
     
     match /payments/{document=**} {
-      allow read, write: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import {
   collection,
   addDoc,
@@ -23,16 +23,21 @@ const COLLECTIONS = {
   PAYMENTS: 'payments'
 };
 
+const getCurrentUserId = () => auth.currentUser?.uid || null;
+
 // ============ Tenants Operations ============
-export const addTenant = async (userId, tenantData) => {
+export const addTenant = async (tenantData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const docRef = await addDoc(collection(db, COLLECTIONS.TENANTS), {
       ...tenantData,
-      userId,
+      userId: uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: docRef.id, ...tenantData };
+    return { id: docRef.id, userId: uid, ...tenantData };
   } catch (error) {
     console.error('Error adding tenant:', error);
     throw error;
@@ -41,7 +46,10 @@ export const addTenant = async (userId, tenantData) => {
 
 export const getTenants = async (userId) => {
   try {
-    const q = query(collection(db, COLLECTIONS.TENANTS), where('userId', '==', userId));
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
+    const q = query(collection(db, COLLECTIONS.TENANTS), where('userId', '==', uid));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -50,14 +58,19 @@ export const getTenants = async (userId) => {
   }
 };
 
-export const updateTenant = async (tenantId, tenantData) => {
+export const updateTenant = async (tenantId, tenantData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const tenantRef = doc(db, COLLECTIONS.TENANTS, tenantId);
-    await updateDoc(tenantRef, {
+    const updatedData = {
       ...tenantData,
+      userId: uid,
       updatedAt: serverTimestamp()
-    });
-    return { id: tenantId, ...tenantData };
+    };
+    await updateDoc(tenantRef, updatedData);
+    return { id: tenantId, userId: uid, ...tenantData };
   } catch (error) {
     console.error('Error updating tenant:', error);
     throw error;
@@ -89,15 +102,18 @@ export const onTenantsChange = (userId, callback) => {
 };
 
 // ============ Units Operations ============
-export const addUnit = async (userId, unitData) => {
+export const addUnit = async (unitData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const docRef = await addDoc(collection(db, COLLECTIONS.UNITS), {
       ...unitData,
-      userId,
+      userId: uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: docRef.id, ...unitData };
+    return { id: docRef.id, userId: uid, ...unitData };
   } catch (error) {
     console.error('Error adding unit:', error);
     throw error;
@@ -106,7 +122,10 @@ export const addUnit = async (userId, unitData) => {
 
 export const getUnits = async (userId) => {
   try {
-    const q = query(collection(db, COLLECTIONS.UNITS), where('userId', '==', userId));
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
+    const q = query(collection(db, COLLECTIONS.UNITS), where('userId', '==', uid));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -115,14 +134,19 @@ export const getUnits = async (userId) => {
   }
 };
 
-export const updateUnit = async (unitId, unitData) => {
+export const updateUnit = async (unitId, unitData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const unitRef = doc(db, COLLECTIONS.UNITS, unitId);
-    await updateDoc(unitRef, {
+    const updatedData = {
       ...unitData,
+      userId: uid,
       updatedAt: serverTimestamp()
-    });
-    return { id: unitId, ...unitData };
+    };
+    await updateDoc(unitRef, updatedData);
+    return { id: unitId, userId: uid, ...unitData };
   } catch (error) {
     console.error('Error updating unit:', error);
     throw error;
@@ -154,15 +178,18 @@ export const onUnitsChange = (userId, callback) => {
 };
 
 // ============ Expenses Operations ============
-export const addExpense = async (userId, expenseData) => {
+export const addExpense = async (expenseData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const docRef = await addDoc(collection(db, COLLECTIONS.EXPENSES), {
       ...expenseData,
-      userId,
+      userId: uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: docRef.id, ...expenseData };
+    return { id: docRef.id, userId: uid, ...expenseData };
   } catch (error) {
     console.error('Error adding expense:', error);
     throw error;
@@ -171,7 +198,10 @@ export const addExpense = async (userId, expenseData) => {
 
 export const getExpenses = async (userId) => {
   try {
-    const q = query(collection(db, COLLECTIONS.EXPENSES), where('userId', '==', userId));
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
+    const q = query(collection(db, COLLECTIONS.EXPENSES), where('userId', '==', uid));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -180,14 +210,19 @@ export const getExpenses = async (userId) => {
   }
 };
 
-export const updateExpense = async (expenseId, expenseData) => {
+export const updateExpense = async (expenseId, expenseData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const expenseRef = doc(db, COLLECTIONS.EXPENSES, expenseId);
-    await updateDoc(expenseRef, {
+    const updatedData = {
       ...expenseData,
+      userId: uid,
       updatedAt: serverTimestamp()
-    });
-    return { id: expenseId, ...expenseData };
+    };
+    await updateDoc(expenseRef, updatedData);
+    return { id: expenseId, userId: uid, ...expenseData };
   } catch (error) {
     console.error('Error updating expense:', error);
     throw error;
@@ -219,15 +254,18 @@ export const onExpensesChange = (userId, callback) => {
 };
 
 // ============ Payments Operations ============
-export const addPayment = async (userId, paymentData) => {
+export const addPayment = async (paymentData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const docRef = await addDoc(collection(db, COLLECTIONS.PAYMENTS), {
       ...paymentData,
-      userId,
+      userId: uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: docRef.id, ...paymentData };
+    return { id: docRef.id, userId: uid, ...paymentData };
   } catch (error) {
     console.error('Error adding payment:', error);
     throw error;
@@ -236,7 +274,10 @@ export const addPayment = async (userId, paymentData) => {
 
 export const getPayments = async (userId) => {
   try {
-    const q = query(collection(db, COLLECTIONS.PAYMENTS), where('userId', '==', userId));
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
+    const q = query(collection(db, COLLECTIONS.PAYMENTS), where('userId', '==', uid));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -245,14 +286,19 @@ export const getPayments = async (userId) => {
   }
 };
 
-export const updatePayment = async (paymentId, paymentData) => {
+export const updatePayment = async (paymentId, paymentData, userId) => {
   try {
+    const uid = userId || getCurrentUserId();
+    if (!uid) throw new Error('Firebase user is not authenticated');
+
     const paymentRef = doc(db, COLLECTIONS.PAYMENTS, paymentId);
-    await updateDoc(paymentRef, {
+    const updatedData = {
       ...paymentData,
+      userId: uid,
       updatedAt: serverTimestamp()
-    });
-    return { id: paymentId, ...paymentData };
+    };
+    await updateDoc(paymentRef, updatedData);
+    return { id: paymentId, userId: uid, ...paymentData };
   } catch (error) {
     console.error('Error updating payment:', error);
     throw error;

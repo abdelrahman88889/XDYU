@@ -5,31 +5,25 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider,
-  FacebookAuthProvider,
-  OAuthProvider,
-  signOut
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loginMethod, setLoginMethod] = useState('social'); // 'social', 'email', 'phone'
 
   // Firebase providers
   const googleProvider = new GoogleAuthProvider();
-  const facebookProvider = new FacebookAuthProvider();
-  const appleProvider = new OAuthProvider('apple.com');
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    if (!email || !password) {
+    if (!email || !password || (isNewUser && !username)) {
       setError('يرجى ملء جميع الحقول');
       return;
     }
@@ -48,12 +42,13 @@ function Login({ onLogin }) {
         // Create new user
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+        const displayName = username || email.split('@')[0];
 
         // Save user data to Firestore
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           email: user.email,
-          displayName: user.displayName || email.split('@')[0],
+          displayName,
           method: 'email',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -62,7 +57,7 @@ function Login({ onLogin }) {
         const userData = {
           uid: user.uid,
           email: user.email,
-          displayName: user.displayName || email.split('@')[0],
+          displayName,
           method: 'email',
           createdAt: new Date().toISOString()
         };
@@ -106,17 +101,6 @@ function Login({ onLogin }) {
     }
   };
 
-  const handleGuest = () => {
-    const guestUser = {
-      uid: 'guest-' + Date.now(),
-      email: 'ضيف',
-      isGuest: true,
-      createdAt: new Date().toISOString()
-    };
-    localStorage.setItem('currentUser', JSON.stringify(guestUser));
-    onLogin(guestUser);
-  };
-
   const handleSocialLogin = async (provider) => {
     setLoading(true);
     setError('');
@@ -124,28 +108,13 @@ function Login({ onLogin }) {
     let authProvider;
     let providerName;
 
-    switch (provider) {
-      case 'google':
-        authProvider = googleProvider;
-        providerName = 'google';
-        break;
-      case 'facebook':
-        authProvider = facebookProvider;
-        providerName = 'facebook';
-        break;
-      case 'apple':
-        authProvider = appleProvider;
-        providerName = 'apple';
-        break;
-      case 'microsoft':
-        authProvider = new OAuthProvider('microsoft.com');
-        authProvider.addScopes('profile', 'email');
-        providerName = 'microsoft';
-        break;
-      default:
-        setError('مزود الخدمة غير معروف');
-        setLoading(false);
-        return;
+    if (provider === 'google') {
+      authProvider = googleProvider;
+      providerName = 'google';
+    } else {
+      setError('مزود الخدمة غير معروف');
+      setLoading(false);
+      return;
     }
 
     try {
@@ -213,169 +182,111 @@ function Login({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-modal">
-        <button className="close-btn" onClick={handleGuest}>✕</button>
-
         <div className="login-content">
           <h1 className="login-modal-title">تسجيل الدخول أو إنشاء حساب</h1>
-          <p className="login-modal-subtitle">ستحصل على جميع أدوات إدارة العقارات بعد تسجيل الدخول.</p>
+          <p className="login-modal-subtitle">يمكنك الدخول عبر Google أو باستخدام البريد وكلمة المرور.</p>
 
           {error && <div className="error-alert">⚠️ {error}</div>}
 
-          {loginMethod === 'social' && (
-            <>
-              <div className="social-buttons-container">
-                <button
-                  type="button"
-                  className="social-btn google-btn"
-                  onClick={() => handleSocialLogin('google')}
-                  disabled={loading}
-                >
-                  <span className="social-icon">🔍</span>
-                  <span>المتابعة باستخدام حساب Google</span>
-                </button>
+          <div className="social-buttons-container">
+            <button
+              type="button"
+              className="social-btn google-btn"
+              onClick={() => handleSocialLogin('google')}
+              disabled={loading}
+            >
+              <span className="social-icon">🔍</span>
+              <span>المتابعة باستخدام حساب Google</span>
+            </button>
+          </div>
 
-                <button
-                  type="button"
-                  className="social-btn apple-btn"
-                  onClick={() => handleSocialLogin('apple')}
-                  disabled={loading}
-                >
-                  <span className="social-icon">🍎</span>
-                  <span>المتابعة باستخدام حساب Apple</span>
-                </button>
+          <div className="divider-container">
+            <span className="divider-text">أو</span>
+          </div>
 
-                <button
-                  type="button"
-                  className="social-btn facebook-btn"
-                  onClick={() => handleSocialLogin('facebook')}
-                  disabled={loading}
-                >
-                  <span className="social-icon">f</span>
-                  <span>المتابعة باستخدام حساب Facebook</span>
-                </button>
+          <div className="form-group">
+            <label>البريد الإلكتروني</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError('');
+              }}
+              placeholder="example@email.com"
+              autoFocus
+            />
+          </div>
 
-                <button
-                  type="button"
-                  className="social-btn microsoft-btn"
-                  onClick={() => handleSocialLogin('microsoft')}
-                  disabled={loading}
-                >
-                  <span className="social-icon">⊞</span>
-                  <span>المتابعة باستخدام حساب Microsoft</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="social-btn email-btn"
-                  onClick={() => setLoginMethod('email')}
-                  disabled={loading}
-                >
-                  <span className="social-icon">✉️</span>
-                  <span>المتابعة باستخدام البريد الإلكتروني</span>
-                </button>
-              </div>
-
-              <div className="divider-container">
-                <span className="divider-text">أو</span>
-              </div>
-            </>
+          {isNewUser && (
+            <div className="form-group">
+              <label>اسم المستخدم</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setError('');
+                }}
+                placeholder="اسم المستخدم"
+              />
+            </div>
           )}
 
-          {loginMethod === 'email' && (
-            <>
-              <div className="back-button-container">
-                <button
-                  type="button"
-                  className="back-btn"
-                  onClick={() => {
-                    setLoginMethod('social');
-                    setError('');
-                    setEmail('');
-                    setPassword('');
-                  }}
-                >
-                  ← رجوع
-                </button>
-              </div>
-
-              <div className="form-group">
-                <label>البريد الإلكتروني</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="example@email.com"
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label>كلمة المرور</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError('');
-                  }}
-                  placeholder="••••••••"
-                />
-              </div>
-
-              <button
-                type="button"
-                className="continue-btn"
-                onClick={handleLogin}
-                disabled={loading}
-              >
-                {loading ? 'جاري المعالجة...' : (isNewUser ? 'إنشاء الحساب' : 'تسجيل الدخول')}
-              </button>
-
-              <div className="toggle-account-mode">
-                {isNewUser ? (
-                  <>
-                    هل لديك حساب؟{' '}
-                    <button 
-                      type="button" 
-                      onClick={() => { 
-                        setIsNewUser(false); 
-                        setError(''); 
-                      }}
-                      disabled={loading}
-                    >
-                      تسجيل الدخول
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    ليس لديك حساب؟{' '}
-                    <button 
-                      type="button" 
-                      onClick={() => { 
-                        setIsNewUser(true); 
-                        setError(''); 
-                      }}
-                      disabled={loading}
-                    >
-                      إنشاء حساب جديد
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-          )}
+          <div className="form-group">
+            <label>كلمة المرور</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              placeholder="••••••••"
+            />
+          </div>
 
           <button
             type="button"
-            className="guest-continue-btn"
-            onClick={handleGuest}
+            className="continue-btn"
+            onClick={handleLogin}
             disabled={loading}
           >
-            متابعة كضيف
+            {loading ? 'جاري المعالجة...' : (isNewUser ? 'إنشاء حساب' : 'تسجيل الدخول')}
           </button>
+
+          <div className="toggle-account-mode">
+            {isNewUser ? (
+              <>
+                هل لديك حساب؟{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewUser(false);
+                    setError('');
+                    setUsername('');
+                  }}
+                  disabled={loading}
+                >
+                  تسجيل الدخول
+                </button>
+              </>
+            ) : (
+              <>
+                ليس لديك حساب؟{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewUser(true);
+                    setError('');
+                  }}
+                  disabled={loading}
+                >
+                  إنشاء حساب جديد
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

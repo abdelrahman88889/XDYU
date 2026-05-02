@@ -23,6 +23,7 @@ function Expenses() {
   const [newExpense, setNewExpense] = useState({
     unitId: '',
     unitName: '',
+    unitType: '',
     category: 'صيانة',
     amount: '',
     description: '',
@@ -79,11 +80,12 @@ function Expenses() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'unitId') {
-      const selectedUnit = units.find(u => u.id === parseInt(value));
+      const selectedUnit = units.find(u => String(u.id) === String(value));
       setNewExpense(prev => ({
         ...prev,
         unitId: value,
-        unitName: selectedUnit ? selectedUnit.number : ''
+        unitName: selectedUnit ? selectedUnit.number : '',
+        unitType: selectedUnit ? selectedUnit.type : ''
       }));
     } else {
       setNewExpense(prev => ({ ...prev, [name]: value }));
@@ -101,6 +103,7 @@ function Expenses() {
       const expenseData = {
         ...newExpense,
         unitId: parseInt(newExpense.unitId),
+        unitType: newExpense.unitType,
         amount: parseInt(newExpense.amount)
       };
 
@@ -115,7 +118,7 @@ function Expenses() {
         setEditingId(null);
       } else {
         if (currentUser?.uid) {
-          await addExpense(currentUser.uid, expenseData);
+          await addExpense(expenseData);
         } else {
           setExpenses([...expenses, {
             ...expenseData,
@@ -127,6 +130,7 @@ function Expenses() {
       setNewExpense({
         unitId: '',
         unitName: '',
+        unitType: '',
         category: 'صيانة',
         amount: '',
         description: '',
@@ -144,7 +148,10 @@ function Expenses() {
   };
 
   const handleEditExpense = (expense) => {
-    setNewExpense(expense);
+    setNewExpense({
+      ...expense,
+      unitType: expense.unitType || ''
+    });
     setEditingId(expense.id);
     setShowForm(true);
   };

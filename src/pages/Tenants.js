@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { addTenant, getTenants, updateTenant, deleteTenant, onTenantsChange } from '../firebaseService';
+import { addTenant, getTenants, updateTenant, deleteTenant, onTenantsChange, onUnitsChange } from '../firebaseService';
 
 const calculatePaymentSchedule = (startDate, endDate, paymentType) => {
   const schedule = [];
@@ -29,6 +29,7 @@ const calculatePaymentSchedule = (startDate, endDate, paymentType) => {
 
 function Tenants() {
   const [tenants, setTenants] = useState([]);
+  const [units, setUnits] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [expandedTenant, setExpandedTenant] = useState(null);
@@ -41,6 +42,7 @@ function Tenants() {
     idNumber: '',
     phone: '',
     nationality: 'سعودي',
+    unitId: '',
     unit: '',
     unitType: 'فيلا',
     contractNumber: '',
@@ -61,40 +63,62 @@ function Tenants() {
 
     if (user?.isGuest) {
       // Load from localStorage for guests
-      const saved = localStorage.getItem('tenants');
-      if (saved) {
-        setTenants(JSON.parse(saved));
+      const savedTenants = localStorage.getItem('tenants');
+      if (savedTenants) {
+        setTenants(JSON.parse(savedTenants));
+      }
+      const savedUnits = localStorage.getItem('units');
+      if (savedUnits) {
+        setUnits(JSON.parse(savedUnits));
       }
     } else if (user?.uid) {
       // Load from Firebase for authenticated users
       setLoading(true);
-      const unsubscribe = onTenantsChange(user.uid, (data) => {
+      const unsubscribeTenants = onTenantsChange(user.uid, (data) => {
         setTenants(data);
         setLoading(false);
       });
-      
+      const unsubscribeUnits = onUnitsChange(user.uid, setUnits);
+
       // Cleanup function
       return () => {
-        if (unsubscribe) unsubscribe();
+        if (unsubscribeTenants) unsubscribeTenants();
+        if (unsubscribeUnits) unsubscribeUnits();
       };
     }
   }, []);
 
-  // Save to localStorage whenever tenants change (for guests)
+  // Save to localStorage whenever tenants or units change (for guests)
   useEffect(() => {
     if (currentUser?.isGuest) {
       localStorage.setItem('tenants', JSON.stringify(tenants));
+      localStorage.setItem('units', JSON.stringify(units));
     }
-  }, [tenants, currentUser?.isGuest]);
+  }, [tenants, units, currentUser?.isGuest]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'unit') {
+      const selectedUnit = units.find(u => String(u.id) === String(value));
+      if (selectedUnit) {
+        setNewTenant(prev => ({
+          ...prev,
+          unitId: selectedUnit.id,
+          unit: selectedUnit.number,
+          unitType: selectedUnit.type
+        }));
+        return;
+      }
+    }
+
     setNewTenant(prev => ({ ...prev, [name]: value }));
   };
 
   const handleAddTenant = async (e) => {
     e.preventDefault();
-    if (!newTenant.name || !newTenant.idNumber || !newTenant.phone || !newTenant.unit || 
+    if (!newTenant.name || !newTenant.idNumber || !newTenant.phone ||
+        (!newTenant.unitId && !newTenant.unit) ||
         !newTenant.rentValue || !newTenant.contractNumber || !newTenant.documentNumber) {
       setError('يرجى ملء جميع الحقول المطلوبة');
       return;
@@ -106,6 +130,7 @@ function Tenants() {
     try {
       const tenantData = {
         ...newTenant,
+        unitId: newTenant.unitId ? parseInt(newTenant.unitId) : '',
         rentValue: parseInt(newTenant.rentValue),
         tax: parseInt(newTenant.tax),
         paymentSchedule: calculatePaymentSchedule(newTenant.rentalStart, newTenant.rentalEnd, newTenant.paymentType)
@@ -124,7 +149,7 @@ function Tenants() {
       } else {
         // Add new tenant
         if (currentUser?.uid) {
-          await addTenant(currentUser.uid, tenantData);
+          await addTenant(tenantData);
         } else {
           setTenants([...tenants, {
             ...tenantData,
@@ -138,6 +163,7 @@ function Tenants() {
         idNumber: '',
         phone: '',
         nationality: 'سعودي',
+        unitId: '',
         unit: '',
         unitType: 'فيلا',
         contractNumber: '',
@@ -161,7 +187,12 @@ function Tenants() {
 
   const handleEditTenant = (tenant) => {
     setEditingId(tenant.id);
-    setNewTenant(tenant);
+    setNewTenant({
+      ...tenant,
+      unitId: tenant.unitId || '',
+      unit: tenant.unit || '',
+      unitType: tenant.unitType || 'فيلا'
+    });
     setShowForm(true);
   };
 
@@ -728,23 +759,41 @@ function Tenants() {
             <div className="form-row">
               <div className="form-group">
                 <label>رقم الوحدة *</label>
-                <input
-                  type="text"
-                  name="unit"
-                  value={newTenant.unit}
-                  onChange={handleInputChange}
-                  placeholder="مثال: الوحدة 1"
-                  required
-                />
+                {units.length > 0 ? (
+                  <select
+                    name="unit"
+                    value={newTenant.unitId || ''}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">-- اختر الوحدة --</option>
+                    {units.map(unit => (
+                      <option key={unit.id} value={unit.id}>
+                        الوحدة {unit.number} - {unit.type}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    name="unit"
+                    value={newTenant.unit}
+                    onChange={handleInputChange}
+                    placeholder="مثال: الوحدة 1"
+                    required
+                  />
+                )}
               </div>
               <div className="form-group">
                 <label>نوع الوحدة *</label>
-                <select name="unitType" value={newTenant.unitType} onChange={handleInputChange} required>
-                  <option value="فيلا">فيلا</option>
-                  <option value="شقة">شقة</option>
-                  <option value="محل تجاري">محل تجاري</option>
-                  <option value="مكتب">مكتب</option>
-                </select>
+                <input
+                  type="text"
+                  name="unitType"
+                  value={newTenant.unitType}
+                  onChange={handleInputChange}
+                  placeholder="مثال: فيلا، شقة"
+                  required
+                />
               </div>
               <div className="form-group">
                 <label>نوع الدفع *</label>
