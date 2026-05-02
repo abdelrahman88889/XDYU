@@ -1,27 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { addUnit, getUnits, updateUnit, deleteUnit, onUnitsChange } from '../firebaseService';
 
-const defaultUnits = [
-  {
-    id: 1,
-    number: '1',
-    type: 'فيلا',
-    location: 'الحي الشمالي',
-    area: 450,
-    rentPrice: 3000,
-    status: 'مأجور',
-    tenant: 'محمد أحمد السعيد'
-  },
-  {
-    id: 2,
-    number: '2',
-    type: 'شقة',
-    location: 'الحي الوسط',
-    area: 150,
-    rentPrice: 1500,
-    status: 'فارغ',
-    tenant: '-'
-  }
-];
+const defaultUnits = [];
 
 function Units() {
   const [units, setUnits] = useState([]);
@@ -29,21 +9,23 @@ function Units() {
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [errors, setErrors] = useState({});
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [newUnit, setNewUnit] = useState({
     number: '',
     type: 'شقة',
     location: '',
     area: '',
-    rentPrice: '',
     status: 'فارغ',
     tenant: '-'
   });
 
-  // Load from local storage on mount
+  // Load from Firebase or localStorage on mount
   useEffect(() => {
-    // الحصول على المستخدم الحالي
     const user = JSON.parse(localStorage.getItem('currentUser'));
-    
+    setCurrentUser(user);
+
     if (user?.isGuest) {
       const saved = localStorage.getItem('units');
       if (saved) {
@@ -52,51 +34,72 @@ function Units() {
         setUnits(defaultUnits);
         localStorage.setItem('units', JSON.stringify(defaultUnits));
       }
-    } else if (user?.email) {
-      const key = `units_${user.email}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        setUnits(JSON.parse(saved));
-      } else {
-        setUnits(defaultUnits);
-        localStorage.setItem(key, JSON.stringify(defaultUnits));
-      }
+    } else if (user?.uid) {
+      setLoading(true);
+      const unsubscribe = onUnitsChange(user.uid, (data) => {
+        setUnits(data);
+        setLoading(false);
+      });
+      
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
     }
   }, []);
 
-  // Save to local storage whenever units change
+  // Save to localStorage whenever units change (for guests)
   useEffect(() => {
-    if (units.length > 0) {
-      const user = JSON.parse(localStorage.getItem('currentUser'));
-      const key = user?.isGuest ? 'units' : `units_${user?.email}`;
-      localStorage.setItem(key, JSON.stringify(units));
+    if (currentUser?.isGuest) {
+      localStorage.setItem('units', JSON.stringify(units));
     }
-  }, [units]);
+  }, [units, currentUser?.isGuest]);
 
   const validateForm = () => {
     const newErrors = {};
     if (!newUnit.number.trim()) newErrors.number = 'رقم الوحدة مطلوب';
     if (!newUnit.location.trim()) newErrors.location = 'الموقع مطلوب';
     if (!newUnit.area || parseInt(newUnit.area) <= 0) newErrors.area = 'المساحة يجب أن تكون أكبر من 0';
-    if (!newUnit.rentPrice || parseInt(newUnit.rentPrice) <= 0) newErrors.rentPrice = 'سعر الإيجار يجب أن يكون أكبر من 0';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleAddUnit = () => {
+  const handleAddUnit = async () => {
     if (!validateForm()) return;
 
-    if (editingId) {
-      setUnits(units.map(u => u.id === editingId ? { ...newUnit, id: editingId, area: parseInt(newUnit.area), rentPrice: parseInt(newUnit.rentPrice) } : u));
-      setEditingId(null);
-    } else {
-      const newId = Math.max(...units.map(u => u.id), 0) + 1;
-      setUnits([...units, { ...newUnit, id: newId, area: parseInt(newUnit.area), rentPrice: parseInt(newUnit.rentPrice) }]);
-    }
+    setLoading(true);
+    setError('');
 
-    setNewUnit({ number: '', type: 'شقة', location: '', area: '', rentPrice: '', status: 'فارغ', tenant: '-' });
-    setShowForm(false);
-    setErrors({});
+    try {
+      const unitData = {
+        ...newUnit,
+        area: parseInt(newUnit.area)
+      };
+
+      if (editingId) {
+        if (currentUser?.uid) {
+          await updateUnit(editingId, unitData);
+        } else {
+          setUnits(units.map(u => u.id === editingId ? { ...u, ...unitData } : u));
+        }
+        setEditingId(null);
+      } else {
+        if (currentUser?.uid) {
+          await addUnit(currentUser.uid, unitData);
+        } else {
+          const newId = Math.max(...units.map(u => u.id || 0), 0) + 1;
+          setUnits([...units, { ...unitData, id: newId }]);
+        }
+      }
+
+      setNewUnit({ number: '', type: 'شقة', location: '', area: '', status: 'فارغ', tenant: '-' });
+      setShowForm(false);
+      setErrors({});
+    } catch (err) {
+      setError('خطأ: ' + err.message);
+      console.error('Error adding unit:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditUnit = (unit) => {
@@ -106,17 +109,30 @@ function Units() {
     setErrors({});
   };
 
-  const handleDeleteUnit = (id) => {
+  const handleDeleteUnit = async (id) => {
     if (window.confirm('هل أنت متأكد من حذف هذه الوحدة؟')) {
-      setUnits(units.filter(u => u.id !== id));
+      setLoading(true);
+      setError('');
+      try {
+        if (currentUser?.uid) {
+          await deleteUnit(id);
+        } else {
+          setUnits(units.filter(u => u.id !== id));
+        }
+      } catch (err) {
+        setError('خطأ في الحذف: ' + err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    setNewUnit({ number: '', type: 'شقة', location: '', area: '', rentPrice: '', status: 'فارغ', tenant: '-' });
+    setNewUnit({ number: '', type: 'شقة', location: '', area: '', status: 'فارغ', tenant: '-' });
     setErrors({});
+    setError('');
   };
 
   const filteredUnits = units.filter(u =>
@@ -165,11 +181,12 @@ function Units() {
           </div>
           <div className="form-group">
             <label>نوع الوحدة</label>
-            <select value={newUnit.type} onChange={(e) => setNewUnit({...newUnit, type: e.target.value})}>
-              <option>شقة</option>
-              <option>فيلا</option>
-              <option>محل تجاري</option>
-            </select>
+            <input
+              type="text"
+              value={newUnit.type}
+              onChange={(e) => setNewUnit({...newUnit, type: e.target.value})}
+              placeholder="مثال: فيلا، شقة، محل تجاري"
+            />
           </div>
           <div className="form-group">
             <label>الموقع</label>
@@ -192,17 +209,6 @@ function Units() {
               className={errors.area ? 'input-error' : ''}
             />
             {errors.area && <span className="error-text">{errors.area}</span>}
-          </div>
-          <div className="form-group">
-            <label>سعر الإيجار (ر.س)</label>
-            <input
-              type="number"
-              value={newUnit.rentPrice}
-              onChange={(e) => setNewUnit({...newUnit, rentPrice: e.target.value})}
-              placeholder="أدخل السعر"
-              className={errors.rentPrice ? 'input-error' : ''}
-            />
-            {errors.rentPrice && <span className="error-text">{errors.rentPrice}</span>}
           </div>
           <div className="form-actions">
             <button className="btn btn-success" onClick={handleAddUnit}>
@@ -233,7 +239,6 @@ function Units() {
               <th>النوع</th>
               <th>الموقع</th>
               <th>المساحة</th>
-              <th>السعر</th>
               <th>الحالة</th>
               <th>المستأجر</th>
               <th>الإجراءات</th>
@@ -246,7 +251,6 @@ function Units() {
                 <td>{unit.type}</td>
                 <td>{unit.location}</td>
                 <td>{unit.area} م²</td>
-                <td>{unit.rentPrice} ر.س</td>
                 <td><span className={`status-badge ${unit.status === 'مأجور' ? 'occupied' : 'empty'}`}>{unit.status}</span></td>
                 <td>{unit.tenant}</td>
                 <td className="actions-cell">

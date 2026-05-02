@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { onTenantsChange, onPaymentsChange, onUnitsChange, onExpensesChange } from '../firebaseService';
 
 function Dashboard() {
   const [tenants, setTenants] = useState([]);
   const [payments, setPayments] = useState([]);
   const [units, setUnits] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
@@ -12,18 +14,34 @@ function Dashboard() {
     const user = JSON.parse(localStorage.getItem('currentUser'));
     setCurrentUser(user);
 
-    // الحصول على بيانات المستأجرين حسب المستخدم
-    const allTenants = JSON.parse(localStorage.getItem('tenants')) || [];
-    const userTenants = user?.isGuest ? allTenants : (JSON.parse(localStorage.getItem(`tenants_${user?.email}`)) || allTenants);
-    setTenants(userTenants);
+    // إذا كان ضيف، استخدم localStorage
+    if (user?.isGuest) {
+      const allTenants = JSON.parse(localStorage.getItem('tenants')) || [];
+      setTenants(allTenants);
 
-    // الحصول على بيانات الدفعات
-    const userPayments = user?.isGuest ? (JSON.parse(localStorage.getItem('payments')) || []) : (JSON.parse(localStorage.getItem(`payments_${user?.email}`)) || []);
-    setPayments(userPayments);
+      const userPayments = JSON.parse(localStorage.getItem('payments')) || [];
+      setPayments(userPayments);
 
-    // الحصول على بيانات الوحدات
-    const userUnits = user?.isGuest ? (JSON.parse(localStorage.getItem('units')) || []) : (JSON.parse(localStorage.getItem(`units_${user?.email}`)) || []);
-    setUnits(userUnits);
+      const userUnits = JSON.parse(localStorage.getItem('units')) || [];
+      setUnits(userUnits);
+
+      const userExpenses = JSON.parse(localStorage.getItem('expenses')) || [];
+      setExpenses(userExpenses);
+    } else if (user?.uid) {
+      // استخدم Firebase للمستخدمين المسجلين
+      const unsubscribeTenants = onTenantsChange(user.uid, setTenants);
+      const unsubscribePayments = onPaymentsChange(user.uid, setPayments);
+      const unsubscribeUnits = onUnitsChange(user.uid, setUnits);
+      const unsubscribeExpenses = onExpensesChange(user.uid, setExpenses);
+
+      // Cleanup function
+      return () => {
+        if (unsubscribeTenants) unsubscribeTenants();
+        if (unsubscribePayments) unsubscribePayments();
+        if (unsubscribeUnits) unsubscribeUnits();
+        if (unsubscribeExpenses) unsubscribeExpenses();
+      };
+    }
   }, []);
 
   // الإحصائيات المحسوبة من البيانات الفعلية
@@ -46,6 +64,23 @@ function Dashboard() {
   const occupancyRate = units.length > 0 
     ? Math.round((totalTenants / units.length) * 100) 
     : 0;
+
+  // حساب المصروفات
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const monthlyExpenses = expenses.filter(exp => {
+    const today = new Date();
+    const expDate = new Date(exp.date);
+    return expDate.getMonth() === today.getMonth() && expDate.getFullYear() === today.getFullYear();
+  }).reduce((sum, exp) => sum + exp.amount, 0);
+
+  const expensesByCategory = [
+    { name: 'صيانة', amount: expenses.filter(e => e.category === 'صيانة').reduce((sum, e) => sum + e.amount, 0) },
+    { name: 'إصلاحات', amount: expenses.filter(e => e.category === 'إصلاحات').reduce((sum, e) => sum + e.amount, 0) },
+    { name: 'نظافة', amount: expenses.filter(e => e.category === 'نظافة').reduce((sum, e) => sum + e.amount, 0) },
+    { name: 'فواتير', amount: expenses.filter(e => e.category === 'فواتير').reduce((sum, e) => sum + e.amount, 0) },
+    { name: 'تأمين', amount: expenses.filter(e => e.category === 'تأمين').reduce((sum, e) => sum + e.amount, 0) },
+    { name: 'أخرى', amount: expenses.filter(e => e.category === 'أخرى').reduce((sum, e) => sum + e.amount, 0) }
+  ].filter(cat => cat.amount > 0);
 
   const overduePayments = tenants.reduce((sum, t) => {
     const today = new Date().toISOString().split('T')[0];
@@ -154,6 +189,24 @@ function Dashboard() {
             <small>تحتاج متابعة</small>
           </div>
         </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">💸</div>
+          <div className="stat-content">
+            <h3>إجمالي المصروفات</h3>
+            <p className="stat-number">{totalExpenses.toLocaleString()} ر.س</p>
+            <small>جميع المصروفات</small>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">📊</div>
+          <div className="stat-content">
+            <h3>مصروفات هذا الشهر</h3>
+            <p className="stat-number">{monthlyExpenses.toLocaleString()} ر.س</p>
+            <small>للشهر الحالي</small>
+          </div>
+        </div>
       </div>
 
       <div className="dashboard-charts">
@@ -194,6 +247,21 @@ function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
         </div>
+
+        {expensesByCategory.length > 0 && (
+          <div className="chart-section">
+            <h2>💸 المصروفات حسب الفئات</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={expensesByCategory} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                <YAxis />
+                <Tooltip formatter={(value) => value.toLocaleString()} />
+                <Bar dataKey="amount" fill="#EC4899" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       <div className="info-section">

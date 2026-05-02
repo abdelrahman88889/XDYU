@@ -1,43 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { onTenantsChange, onPaymentsChange } from '../firebaseService';
 
 function Collections() {
   const [tenants, setTenants] = useState([]);
   const [payments, setPayments] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // الحصول على المستخدم الحالي
     const user = JSON.parse(localStorage.getItem('currentUser'));
     setCurrentUser(user);
 
-    // تحميل بيانات المستأجرين
     if (user?.isGuest) {
+      // Load from localStorage for guests
       const saved = localStorage.getItem('tenants');
       if (saved) setTenants(JSON.parse(saved));
-    } else if (user?.email) {
-      const saved = localStorage.getItem(`tenants_${user.email}`);
-      if (saved) setTenants(JSON.parse(saved));
+      
+      const paymentsSaved = localStorage.getItem('payments');
+      if (paymentsSaved) setPayments(JSON.parse(paymentsSaved));
+      
+      setLoading(false);
+    } else if (user?.uid) {
+      // Load from Firebase for authenticated users
+      const unsubscribeTenants = onTenantsChange(user.uid, setTenants);
+      const unsubscribePayments = onPaymentsChange(user.uid, setPayments);
+      
+      setLoading(false);
+
+      return () => {
+        if (unsubscribeTenants) unsubscribeTenants();
+        if (unsubscribePayments) unsubscribePayments();
+      };
     }
   }, []);
 
   useEffect(() => {
-    // تحميل بيانات الدفعات
-    if (currentUser?.isGuest) {
-      const saved = localStorage.getItem('payments');
-      if (saved) setPayments(JSON.parse(saved));
-    } else if (currentUser?.email) {
-      const saved = localStorage.getItem(`payments_${currentUser.email}`);
-      if (saved) setPayments(JSON.parse(saved));
+    if (currentUser?.isGuest && payments.length > 0) {
+      localStorage.setItem('payments', JSON.stringify(payments));
     }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (payments.length > 0) {
-      const key = currentUser?.isGuest ? 'payments' : `payments_${currentUser?.email}`;
-      localStorage.setItem(key, JSON.stringify(payments));
-    }
-  }, [payments, currentUser]);
+  }, [payments, currentUser?.isGuest]);
 
   const getCurrentMonth = () => {
     const now = new Date();
